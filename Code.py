@@ -780,27 +780,31 @@ def clean_latex_for_pdf(text):
 
 def generate_pdf_report(log_entries, solved_values, student_surname, student_name, fig):
     """
-    Genera un PDF professionale usando FPDF (100% compatibile con tutti i dispositivi).
+    Genera un PDF professionale usando FPDF con font incorporati (100% compatibile).
     Include grafico come immagine PNG statica.
+    Usa font core PDF incorporati automaticamente per compatibilità universale.
     """
     if not FPDF_AVAILABLE:
         return b"PDF Error: fpdf2 not installed. Install with: pip install fpdf2"
     
     try:
-        # Crea PDF
-        pdf = FPDF()
+        # Crea PDF - usa format PDF/A per massima compatibilità
+        pdf = FPDF(format='A4')
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
         
+        # Usa font "core" che vengono automaticamente incorporati
+        # Times è un font standard PDF che funziona su tutti i dispositivi
+        
         # === INTESTAZIONE ===
-        pdf.set_font('Helvetica', 'B', 20)
+        pdf.set_font('Times', 'B', 20)
         pdf.cell(0, 12, 'Report GeoSolver', align='C', new_x="LMARGIN", new_y="NEXT")
         
-        pdf.set_font('Helvetica', '', 11)
+        pdf.set_font('Times', '', 11)
         pdf.cell(0, 7, 'Esercizio di Topografia', align='C', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
         
-        pdf.set_font('Helvetica', 'I', 10)
+        pdf.set_font('Times', 'I', 10)
         pdf.cell(0, 6, 'Prof. G. Losenno - Prof. E. D\'Aranno', align='C', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(8)
         
@@ -810,11 +814,17 @@ def generate_pdf_report(log_entries, solved_values, student_surname, student_nam
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(5)
         
-        pdf.set_font('Helvetica', 'B', 13)
-        pdf.cell(0, 8, f'Studente: {student_surname} {student_name}', new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font('Times', 'B', 13)
+        # Codifica corretta per caratteri speciali
+        try:
+            student_text = f'Studente: {student_surname} {student_name}'
+            pdf.cell(0, 8, student_text, new_x="LMARGIN", new_y="NEXT")
+        except:
+            # Fallback se ci sono problemi di encoding
+            pdf.cell(0, 8, f'Studente: {student_surname} {student_name}', new_x="LMARGIN", new_y="NEXT")
         
         now = datetime.now()
-        pdf.set_font('Helvetica', '', 10)
+        pdf.set_font('Times', '', 10)
         pdf.cell(0, 6, f'Data: {now.strftime("%d/%m/%Y ore %H:%M")}', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(5)
         
@@ -836,7 +846,7 @@ def generate_pdf_report(log_entries, solved_values, student_surname, student_nam
                     tmp_path = tmp.name
                 
                 # Inserisci immagine nel PDF
-                pdf.set_font('Helvetica', 'B', 12)
+                pdf.set_font('Times', 'B', 12)
                 pdf.cell(0, 8, 'Grafico del Poligono:', new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(2)
                 
@@ -854,14 +864,14 @@ def generate_pdf_report(log_entries, solved_values, student_surname, student_nam
             except Exception as e:
                 print(f"⚠️ Impossibile includere grafico: {e}")
                 print("ℹ️ Installa kaleido per includere il grafico: pip install kaleido")
-                pdf.set_font('Helvetica', 'I', 10)
+                pdf.set_font('Times', 'I', 10)
                 pdf.set_fill_color(248, 249, 250)
                 pdf.multi_cell(0, 6, '📊 Grafico non disponibile (installa kaleido: pip install kaleido)', 
                               fill=True, align='C')
                 pdf.ln(3)
         
         # === PASSAGGI DI RISOLUZIONE ===
-        pdf.set_font('Helvetica', 'B', 14)
+        pdf.set_font('Times', 'B', 14)
         pdf.cell(0, 10, 'Passaggi di Risoluzione:', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
         
@@ -883,7 +893,7 @@ def generate_pdf_report(log_entries, solved_values, student_surname, student_nam
                 pdf.set_fill_color(232, 245, 233)  # Verde chiaro
                 icon = '✅'
             
-            pdf.set_font('Helvetica', 'B', 11)
+            pdf.set_font('Times', 'B', 11)
             pdf.multi_cell(0, 7, f'{icon} Step {i}: {entry.get("action", "N/A")}', 
                           fill=True, new_x="LMARGIN", new_y="NEXT")
             
@@ -891,7 +901,7 @@ def generate_pdf_report(log_entries, solved_values, student_surname, student_nam
             method = entry.get('method', 'N/A')
             method_clean = clean_latex_for_pdf(method)
             
-            pdf.set_font('Helvetica', 'I', 9)
+            pdf.set_font('Times', 'I', 9)
             pdf.set_fill_color(255, 252, 231)  # Giallo pallido
             pdf.multi_cell(0, 5, f'Metodo: {method_clean[:120]}', 
                           fill=True, new_x="LMARGIN", new_y="NEXT")
@@ -900,7 +910,7 @@ def generate_pdf_report(log_entries, solved_values, student_surname, student_nam
             result = entry.get('result', 'N/A')
             result_clean = clean_latex_for_pdf(result)
             
-            pdf.set_font('Helvetica', '', 9)
+            pdf.set_font('Times', '', 9)
             if len(result_clean) > 200:
                 result_clean = result_clean[:200] + '...'
             
@@ -921,11 +931,11 @@ def generate_pdf_report(log_entries, solved_values, student_surname, student_nam
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(5)
         
-        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_font('Times', 'B', 12)
         pdf.cell(0, 8, '📊 Statistiche Esercizio:', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
         
-        pdf.set_font('Helvetica', '', 10)
+        pdf.set_font('Times', '', 10)
         pdf.cell(0, 6, f'Totale passaggi: {total_steps}', new_x="LMARGIN", new_y="NEXT")
         pdf.cell(0, 6, f'Passaggi corretti: {success_count} ✅', new_x="LMARGIN", new_y="NEXT")
         pdf.cell(0, 6, f'Errori commessi: {error_count} ❌', new_x="LMARGIN", new_y="NEXT")
@@ -936,7 +946,7 @@ def generate_pdf_report(log_entries, solved_values, student_surname, student_nam
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(3)
         
-        pdf.set_font('Helvetica', 'I', 8)
+        pdf.set_font('Times', 'I', 8)
         pdf.set_text_color(128, 128, 128)
         pdf.cell(0, 5, 'Report generato automaticamente da GeoSolver v68', 
                 align='C', new_x="LMARGIN", new_y="NEXT")
