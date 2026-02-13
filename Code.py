@@ -28,6 +28,15 @@ try:
 except ImportError:
     PLOTLY_IO_AVAILABLE = False
 
+# Import matplotlib per rendering LaTeX nel PDF
+try:
+    import matplotlib
+    matplotlib.use('Agg') # Backend non interattivo per server
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
 # --- CONFIGURAZIONE ---
 st.set_page_config(layout="wide", page_title="GeoSolver v69 - Prof. Losenno")
 
@@ -671,6 +680,45 @@ def clean_latex_for_text(text):
     
     return text
 
+def latex_to_rl_image(latex_str, fontsize=12):
+    """Converte stringa LaTeX in immagine ReportLab usando Matplotlib"""
+    if not MATPLOTLIB_AVAILABLE or not latex_str:
+        return None
+    
+    try:
+        # Pulisci la stringa
+        s = latex_str.strip()
+        # Rimuovi delimitatori se presenti (matplotlib li vuole o no a seconda del contesto, ma meglio gestire)
+        if s.startswith('$$') and s.endswith('$$'): s = s[2:-2]
+        elif s.startswith('$') and s.endswith('$'): s = s[1:-1]
+        
+        # Matplotlib mathtext richiede $...$ per il math mode
+        render_str = f"${s}$"
+        
+        # Configura plot
+        buf = BytesIO()
+        fig = plt.figure(figsize=(0.1, 0.1)) # Dimensione dummy
+        # Renderizza testo
+        fig.text(0, 0, render_str, fontsize=fontsize)
+        
+        # Salva con bounding box stretto
+        fig.savefig(buf, format='png', dpi=300, bbox_inches='tight', transparent=True, pad_inches=0.02)
+        plt.close(fig)
+        buf.seek(0)
+        
+        # Calcola dimensioni per ReportLab
+        from PIL import Image as PILImage
+        with PILImage.open(buf) as pil_img:
+            w_px, h_px = pil_img.size
+        
+        # Conversione px -> punti (300dpi -> 72dpi)
+        scale_factor = 72 / 300 * 0.8 # 0.8 correzione visiva
+        buf.seek(0)
+        return RLImage(buf, width=w_px*scale_factor, height=h_px*scale_factor)
+        
+    except Exception as e:
+        # In caso di errore (es. sintassi non supportata da mathtext), ritorna None per fallback testuale
+        return None
 
 def generate_pdf_with_reportlab(log_entries, solved_values, student_surname, student_name, fig):
     """
@@ -804,8 +852,21 @@ def generate_pdf_with_reportlab(log_entries, solved_values, student_surname, stu
         for i, entry in enumerate(log_entries, 1):
             is_error = entry.get('is_error', False)
             action = clean_latex_for_text(entry.get('action', 'N/A'))
-            method = clean_latex_for_text(entry.get('method', 'N/A'))
-            result = clean_latex_for_text(entry.get('result', 'N/A'))
+            
+            # Tenta di generare immagine LaTeX per il Metodo (Formula)
+            method_raw = entry.get('method', 'N/A')
+            method_img = latex_to_rl_image(method_raw, fontsize=11)
+            if method_img:
+                method_content = [Paragraph('<i>Metodo:</i>', step_style), method_img]
+            else:
+                method_content = [Paragraph(f'<i>Metodo:</i> {clean_latex_for_text(method_raw)}', step_style)]
+            
+            # Per il Risultato, usa testo pulito (spesso è multiline aligned, difficile per mathtext)
+            # Se è semplice, si potrebbe provare a renderizzarlo, ma aligned fallisce in matplotlib standard
+            result_raw = entry.get('result', 'N/A')
+            # Fallback a testo per il risultato per garantire leggibilità dei passaggi numerici
+            result_clean = clean_latex_for_text(result_raw)
+            result_content = [Paragraph(f'<i>Risultato:</i> {result_clean}', step_style)]
             
             # NON limitare la lunghezza - usa word wrapping
             
@@ -837,8 +898,8 @@ def generate_pdf_with_reportlab(log_entries, solved_values, student_surname, stu
             # Usa Paragraph per permettere word wrapping automatico
             step_content = [
                 [Paragraph(f'{icon} <b>Step {i}: {action}</b>', step_title_style)],
-                [Paragraph(f'<i>Metodo:</i> {method}', step_style)],
-                [Paragraph(f'<i>Risultato:</i> {result}', step_style)]
+                method_content,
+                result_content
             ]
             
             step_table = Table(step_content, colWidths=[165*mm])
