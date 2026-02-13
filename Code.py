@@ -694,7 +694,7 @@ def generate_pdf_with_reportlab(log_entries, solved_values, student_surname, stu
         story = []
         
         # Intestazione
-        story.append(Paragraph('<b>GeoSolver - Report Genio Rurale</b>', title_style))
+        story.append(Paragraph('<b>GeoSolver - Report Topografia</b>', title_style))
         story.append(Paragraph('Prof. G. Losenno - Prof. E. D\'Aranno', styles['Normal']))
         story.append(Spacer(1, 10*mm))
         
@@ -715,29 +715,83 @@ def generate_pdf_with_reportlab(log_entries, solved_values, student_surname, stu
         story.append(info_table)
         story.append(Spacer(1, 8*mm))
         
-        # Grafico (opzionale - se fallisce continua comunque)
+        # Grafico (con multipli metodi fallback per massima compatibilità)
         tmp_path = None  # Track temp file
         if fig:
+            graph_included = False
+            
+            # METODO 1: Prova con PIL/Pillow (non richiede kaleido)
             try:
-                if not PLOTLY_IO_AVAILABLE:
-                    raise ImportError("plotly.io non disponibile")
+                from PIL import Image as PILImage
+                import io
                 
-                import tempfile, os
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
-                    img_bytes = pio.to_image(fig, format='png', width=1200, height=800)
-                    tmp.write(img_bytes)
-                    tmp_path = tmp.name
+                # Esporta come HTML statico e converti con selenium-like approach
+                # Oppure usa il metodo più semplice: salva come bytes in memoria
+                img_bytes_io = BytesIO()
                 
+                # Salva figura come immagine usando il metodo write_image se disponibile
+                try:
+                    fig.write_image(img_bytes_io, format='png', width=1200, height=800)
+                    img_bytes_io.seek(0)
+                    
+                    import tempfile, os
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+                        tmp.write(img_bytes_io.read())
+                        tmp_path = tmp.name
+                    
+                    story.append(Paragraph('<b>Grafico del Poligono</b>', heading_style))
+                    img = RLImage(tmp_path, width=160*mm, height=106*mm)
+                    story.append(img)
+                    story.append(Spacer(1, 6*mm))
+                    graph_included = True
+                    print("✅ Grafico incluso (metodo write_image)")
+                except:
+                    raise  # Vai al metodo successivo
+                    
+            except Exception as e1:
+                # METODO 2: Prova con kaleido (fallback)
+                try:
+                    if not PLOTLY_IO_AVAILABLE:
+                        raise ImportError("plotly.io non disponibile")
+                    
+                    import tempfile, os
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+                        img_bytes = pio.to_image(fig, format='png', width=1200, height=800, engine='kaleido')
+                        tmp.write(img_bytes)
+                        tmp_path = tmp.name
+                    
+                    story.append(Paragraph('<b>Grafico del Poligono</b>', heading_style))
+                    img = RLImage(tmp_path, width=160*mm, height=106*mm)
+                    story.append(img)
+                    story.append(Spacer(1, 6*mm))
+                    graph_included = True
+                    print("✅ Grafico incluso (metodo kaleido)")
+                    
+                except Exception as e2:
+                    # METODO 3: Prova con orca (vecchio metodo)
+                    try:
+                        import tempfile, os
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+                            img_bytes = pio.to_image(fig, format='png', width=1200, height=800, engine='orca')
+                            tmp.write(img_bytes)
+                            tmp_path = tmp.name
+                        
+                        story.append(Paragraph('<b>Grafico del Poligono</b>', heading_style))
+                        img = RLImage(tmp_path, width=160*mm, height=106*mm)
+                        story.append(img)
+                        story.append(Spacer(1, 6*mm))
+                        graph_included = True
+                        print("✅ Grafico incluso (metodo orca)")
+                    except Exception as e3:
+                        # Tutti i metodi falliti
+                        print(f"⚠️ Impossibile includere grafico:")
+                        print(f"  - Metodo 1 (write_image): {e1}")
+                        print(f"  - Metodo 2 (kaleido): {e2}")
+                        print(f"  - Metodo 3 (orca): {e3}")
+                        
+            if not graph_included:
                 story.append(Paragraph('<b>Grafico del Poligono</b>', heading_style))
-                img = RLImage(tmp_path, width=160*mm, height=106*mm)
-                story.append(img)
-                story.append(Spacer(1, 6*mm))
-                # NON cancellare ancora - ReportLab lo leggerà dopo
-                print("✅ Grafico incluso nel PDF")
-            except Exception as e:
-                print(f"⚠️ Grafico non incluso: {e}")
-                story.append(Paragraph('<b>Grafico del Poligono</b>', heading_style))
-                story.append(Paragraph(f'<i>[Grafico non disponibile - Installa kaleido: pip install kaleido]</i>', normal_style))
+                story.append(Paragraph('<i>[Grafico non disponibile - Il grafico è visibile nell\'applicazione web]</i>', normal_style))
                 story.append(Spacer(1, 3*mm))
         
         # Passaggi
